@@ -36,9 +36,17 @@ jobs:
         run: rustup show
       - run: cargo clippy --all-targets --locked -- -D warnings
 
-  # M7: o fixture de referencia preta nao vive no repo. Este job baixa e confere
-  # o sha256 antes de rodar a suite. O teste le VYNAMP_MP3_REFERENCE; sem ela,
-  # e #[ignore = "..."] e aparece listado no cargo test em vez de sumir.
+  # M7 preve um fixture de referencia preta baixado e conferido por sha256 antes
+  # da suite. Ele NAO esta aqui porque nem o script nem o teste existem: o repo
+  # foi semeado com `fn main() {}` e nenhum `src/` ou `tests/` le
+  # VYNAMP_MP3_REFERENCE. O template prescrevia `./scripts/fetch-fixtures.sh`,
+  # um arquivo que nunca foi criado em nenhum dos tres apps -- o job falhava com
+  # exit 127 antes de rodar um teste sequer.
+  #
+  # Quando o primeiro teste de referencia preta entrar, ele vem com o script e
+  # com o `#[ignore = "VYNAMP_MP3_REFERENCE ausente"]`, e este job ganha de volta
+  # o passo de fetch e o `-- --include-ignored`. Enquanto nao existir teste que
+  # consuma o fixture, baixar oito megabytes por run serve a nada.
   test:
     needs: clippy
     runs-on: ubuntu-22.04
@@ -48,12 +56,7 @@ jobs:
           persist-credentials: false
       - name: Provision pinned Rust toolchain
         run: rustup show
-      - name: Fetch reference fixture
-        run: ./scripts/fetch-fixtures.sh
-      - name: Run tests with reference fixture
-        env:
-          VYNAMP_MP3_REFERENCE: ${{ github.workspace }}/fixtures/reference.mp3
-        run: cargo test --all --locked -- --include-ignored
+      - run: cargo test --all --locked
 
   build:
     needs: test
