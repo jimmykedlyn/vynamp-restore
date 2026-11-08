@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Provision pinned Rust toolchain
+        run: rustup show
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    needs: fmt
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Provision pinned Rust toolchain
+        run: rustup show
+      - run: cargo clippy --all-targets --locked -- -D warnings
+
+  # M7: o fixture de referencia preta nao vive no repo. Este job baixa e confere
+  # o sha256 antes de rodar a suite. O teste le VYNAMP_MP3_REFERENCE; sem ela,
+  # e #[ignore = "..."] e aparece listado no cargo test em vez de sumir.
+  test:
+    needs: clippy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Provision pinned Rust toolchain
+        run: rustup show
+      - name: Fetch reference fixture
+        run: ./scripts/fetch-fixtures.sh
+      - name: Run tests with reference fixture
+        env:
+          VYNAMP_MP3_REFERENCE: ${{ github.workspace }}/fixtures/reference.mp3
+        run: cargo test --all --locked -- --include-ignored
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Provision pinned Rust toolchain
+        run: rustup show
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --all --locked --target ${{ matrix.target }}
+
+  gate:
+    name: CI Gate
+    if: always()
+    needs: [fmt, clippy, test, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Aggregate
+        shell: bash
+        run: |
+          test "${{ needs.fmt.result }}" = success
+          test "${{ needs.clippy.result }}" = success
+          test "${{ needs.test.result }}" = success
+          test "${{ needs.build.result }}" = success
+          echo 'CI Gate passed.'
