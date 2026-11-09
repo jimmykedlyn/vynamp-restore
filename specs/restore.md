@@ -16,6 +16,9 @@
 > `01-arvore-final.md` §2 e valem como norma. §3 a §6 e §8 a §10 exigem projeto de
 > API e **não** foram escritos: inventá-los aqui seria fabricar a autoridade que o SDD
 > exige. Estado só passa a `aprovada` com §5 preenchida.
+>
+> **A fonte normativa é o repositório principal, não este arquivo.** Ver
+> [`specs/README.md`](README.md) para o documento canônico deste módulo.
 
 ## 1. Propósito
 
